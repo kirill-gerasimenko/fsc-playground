@@ -51,6 +51,18 @@ let commentsParsingTests = [
         comments.Length ==? 1
         comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Line (4,false) } 
 
+    testCase "" <| fun _ ->
+        // arrange, act
+        let comments = 
+            @"(* starts
+            let x = 10
+            *)" 
+            |> getComments
+        
+        // asset
+        comments.Length ==? 3
+
+        ()
     |> fsiRunTest
     ]
 
@@ -62,7 +74,7 @@ commentsParsingTests |> List.iter (fsiRunTest>>ignore)
 
 [<Literal>]
 let code = 
-    @"~
+    @"(*
         // test
         v
 

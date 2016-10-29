@@ -1,5 +1,7 @@
 #load "../paket-files/include-scripts/net46/include.main.group.fsx"
+#load "utils.fsx"
 
+open Utils
 open Microsoft.FSharp.Compiler.SourceCodeServices
 
 type Range = Range of left:int * right:int
@@ -69,99 +71,95 @@ let aggregateCommentTokens (tokens:FSharpTokenInfo list) =
 
     loop [] tokens |> List.rev
 
+let isComment (token:FSharpTokenInfo) =
+    token.ColorClass = FSharpTokenColorKind.Comment
+
+let isNotComment = isComment >> not
+
+let isLineComment (token:FSharpTokenInfo) =
+    token.CharClass = FSharpTokenCharKind.LineComment
+
+let isRangeComment (token:FSharpTokenInfo) =
+    token.CharClass = FSharpTokenCharKind.Comment
+
 let ofTokenizedLines (linesTokens:(string*int*FSharpTokenInfo list) list) =
-    let isComment (token:FSharpTokenInfo) =
-        token.ColorClass = FSharpTokenColorKind.Comment
-
-    let isNotComment = isComment >> not
-
-    let isLineComment (token:FSharpTokenInfo) =
-        token.CharClass = FSharpTokenCharKind.LineComment
-
-    let isRangeComment (token:FSharpTokenInfo) =
-        token.CharClass = FSharpTokenCharKind.Comment
-
     let commentsRanges =
         linesTokens
-        |> List.map (fun (lineBody,line,tokens) -> 
-            lineBody,line,tokens |> aggregateCommentTokens)
-        |> List.collect (fun (t,l,toks) ->
+        |> List.map (fun (_,line,tokens) -> 
+            line,tokens |> aggregateCommentTokens)
+        |> List.collect (fun (l,toks) ->
             match toks with
             | [] -> 
                 [l,None]
             | _ -> 
                 toks |> List.map (fun tok -> l,tok |> Some))
 
-    let parsed =
-        commentsRanges
-        |> List.fold (fun comments (line,currToken) ->
-            match currToken, comments |> List.tryHead with
-            | None, None ->
+    commentsRanges
+    |> List.fold (fun comments (line,currToken) ->
+        match currToken, comments |> List.tryHead with
+        | None, None ->
+            comments
+        | None, Some prevComment ->
+            let updatedComments =
+                match prevComment.Comment with
+                | LineCommentInfo.Line (_,true) | LineCommentInfo.WholeLine true | LineCommentInfo.Range (_,_,true) -> 
+                    { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
+                | _ -> 
+                    comments
+            { Line = line; Comment = LineCommentInfo.WholeLine true }::updatedComments
+        | Some token, None ->
+            if token |> isNotComment then
                 comments
-            | None, Some prevComment ->
-                let updatedComments =
+            else
+                let comment =
+                    if token |> isLineComment then
+                        if token.LeftColumn = 0 then { Line = line; Comment = LineCommentInfo.WholeLine false }
+                        else { Line = line; Comment = LineCommentInfo.Line (token.LeftColumn,false) }
+                    else
+                        { Line = line; Comment = LineCommentInfo.Range (token.LeftColumn,token.RightColumn,true) }
+                comment::comments
+        | Some token, Some prevComment ->
+            if token |> isRangeComment then
+                let updatedComments = 
                     match prevComment.Comment with
-                    | LineCommentInfo.Line (_,true) | LineCommentInfo.WholeLine true | LineCommentInfo.Range (_,_,true) -> 
+                    | LineCommentInfo.Range (left,_,true) when line <> prevComment.Line ->
+                        if left = 0 then 
+                            { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
+                        else
+                            { prevComment with Comment = LineCommentInfo.Line (left,true) }::(comments |> List.skip 1)
+                    | LineCommentInfo.Line (left,true) when line <> prevComment.Line ->
+                        if left = 0 then 
+                            { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
+                        else
+                            { prevComment with Comment = LineCommentInfo.Line (left,true) }::(comments |> List.skip 1)
+                    | LineCommentInfo.WholeLine true when line <> prevComment.Line ->
                         { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
                     | _ -> 
                         comments
-                { Line = line; Comment = LineCommentInfo.WholeLine true }::updatedComments
-            | Some token, None ->
-                if token |> isNotComment then
+                { Line = line; Comment = LineCommentInfo.Range (token.LeftColumn,token.RightColumn,true) }::updatedComments
+            elif token |> isNotComment then
+                match prevComment.Comment with
+                | LineCommentInfo.Range (left,right,true) ->
+                    { prevComment with Comment = LineCommentInfo.Range (left,right,false) }::(comments |> List.skip 1)
+                | _ ->
                     comments
-                else
+            else
+                if token |> isLineComment then
                     let comment =
-                        if token |> isLineComment then
-                            if token.LeftColumn = 0 then { Line = line; Comment = LineCommentInfo.WholeLine false }
-                            else { Line = line; Comment = LineCommentInfo.Line (token.LeftColumn,false) }
+                        if token.LeftColumn = 0 then
+                            { Line = line; Comment = LineCommentInfo.WholeLine false }
                         else
-                            { Line = line; Comment = LineCommentInfo.Range (token.LeftColumn,token.RightColumn,true) }
+                            { Line = line; Comment = LineCommentInfo.Line (token.LeftColumn,false) }
                     comment::comments
-            | Some token, Some prevComment ->
-                if token |> isRangeComment then
-                    let updatedComments = 
-                        match prevComment.Comment with
-                        | LineCommentInfo.Range (left,_,true) when line <> prevComment.Line ->
-                            if left = 0 then 
-                                { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
-                            else
-                                { prevComment with Comment = LineCommentInfo.Line (left,true) }::(comments |> List.skip 1)
-                        | LineCommentInfo.Line (left,true) when line <> prevComment.Line ->
-                            if left = 0 then 
-                                { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
-                            else
-                                { prevComment with Comment = LineCommentInfo.Line (left,true) }::(comments |> List.skip 1)
-                        | LineCommentInfo.WholeLine true when line <> prevComment.Line ->
-                            { prevComment with Comment = LineCommentInfo.WholeLine true }::(comments |> List.skip 1)
-                        | _ -> 
-                            comments
-                    { Line = line; Comment = LineCommentInfo.Range (token.LeftColumn,token.RightColumn,true) }::updatedComments
-                elif token |> isNotComment then
-                    match prevComment.Comment with
-                    | LineCommentInfo.Range (left,right,true) ->
-                        { prevComment with Comment = LineCommentInfo.Range (left,right,false) }::(comments |> List.skip 1)
-                    | _ ->
-                        comments
                 else
-                    if token |> isLineComment then
-                        let comment =
-                            if token.LeftColumn = 0 then
-                                { Line = line; Comment = LineCommentInfo.WholeLine false }
-                            else
-                                { Line = line; Comment = LineCommentInfo.Line (token.LeftColumn,false) }
-                        comment::comments
-                    else
-                        comments
-            ) []
-        |> List.rev
+                    comments
+        ) []
+    |> List.rev
 
-    parsed
+let getComments text =
+    let sourceTokenizer = FSharpSourceTokenizer ([], None)
 
-let tokenizeText =
-    FSharpSourceTokenizer ([], None) |> Tokenizer.tokenizeText 
-    
-let comments =
-    code 
-    |> getLines  
-    |> tokenizeText
-    |> CommentsMap.ofTokenizedLines
+    text
+    |> getLines
+    |> tokenizeText sourceTokenizer
+    |> ofTokenizedLines

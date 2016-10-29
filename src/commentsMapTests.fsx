@@ -1,6 +1,9 @@
 #load "commentsMap.fsx"
+#load "utils.fsx"
 
+open CommentsMap
 open Expecto
+open Utils
 
 
 [<Literal>]
@@ -18,11 +21,13 @@ let code =
     test
     "
 
-let tokenizeText =
-    FSharpSourceTokenizer ([], None) |> Tokenizer.tokenizeText 
+let commentsParsingTests = [   
+    testCase "Test" <| fun _->
+        let sourceCode = @""
+        let comments = sourceCode |> getComments
+        ()
+    testCase "Test2" <| fun _ ->
+        ()
+    ]
 
-let comments =
-    code 
-    |> getLines  
-    |> tokenizeText
-    |> lpTrace "Tokenized text"
+commentsParsingTests |> List.iter (fsiRunTest>>ignore)

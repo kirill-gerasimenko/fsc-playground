@@ -9,7 +9,7 @@ open Utils
 
 let getComments = CommentsMap.getComments >> Array.ofList
 
-let commentsParsingTests = [   
+let singleLineTests = [   
     testCase "Line without comments gives empty result" <| fun _->
         // arrange, act
         let comments = @"let x = 10" |> getComments
@@ -49,40 +49,56 @@ let commentsParsingTests = [
 
         // assert
         comments.Length ==? 1
-        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Line (4,false) } 
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Line (4,false) }
 
-    testCase "" <| fun _ ->
+    testCase "Line comment is whole line" <| fun _ ->
+        // arrange, act
+        let comments = "// this is whole line" |> getComments
+
+        // act
+        comments.Length ==? 1
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.WholeLine false }
+    ]
+
+let mulitiLineTests = [
+    testCase "3 lines multiline comment" <| fun _ ->
         // arrange, act
         let comments = 
-            @"(* starts
-            let x = 10
-            *)" 
+            "(* starts \nlet x = 10\n*)" 
             |> getComments
         
         // asset
         comments.Length ==? 3
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.WholeLine true }
+        comments.[1] ==? { Line = 1; Comment = LineCommentInfo.WholeLine true }
+        comments.[2] ==? { Line = 2; Comment = LineCommentInfo.Range (0,1,true) }
 
-        ()
-    |> fsiRunTest
+    testCase "3 lines multiline comment inside tokens" <| fun _ ->
+        // arrange, act
+        let comments =
+            "let x = 10; (*\n some mutiline \n*) let y = 10"
+            |> getComments
+
+        // assert
+        comments.Length ==? 3
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Line (12,true) }
+        comments.[1] ==? { Line = 1; Comment = LineCommentInfo.WholeLine true }
+        comments.[2] ==? { Line = 2; Comment = LineCommentInfo.Range (0,1,false) }
+    
+    testCase "Empty line in multiline comment" <| fun _ ->
+        // arrange, act
+        let comments =
+            "(*\n\n*)" |> getComments
+        
+        // act
+        comments.Length ==? 3
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.WholeLine true }
+        comments.[1] ==? { Line = 1; Comment = LineCommentInfo.WholeLine true }
+        comments.[2] ==? { Line = 2; Comment = LineCommentInfo.Range (0,1,true) }
     ]
 
-
-commentsParsingTests |> List.iter (fsiRunTest>>ignore)
-
-
-
-
-[<Literal>]
-let code = 
-    @"(*
-        // test
-        v
-
-        Path. *)
-    
-    // this is comment for the line below
-    let x = 10 (*comment inside of line*) then some (* one more comment*) text
-    //open System.IO
-    let y = (* only one comment *)
-    test
-    "
+[
+    yield! singleLineTests
+    yield! mulitiLineTests
+] 
+|> List.iter (fsiRunTest>>ignore)

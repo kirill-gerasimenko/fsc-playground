@@ -33,7 +33,7 @@ let fsiPrinters =
     summary = fun summary -> printfn "Finished." }
 
 let fsiConfig = { defaultConfig with printer = fsiPrinters }
-let fsiRunTest test = 
-    Expecto.Tests.runTests fsiConfig |> ignore
+let fsiRunTest test =
+    test |> Expecto.Tests.runTests fsiConfig |> ignore
     test
 let (==?) actual expected = Expect.equal actual expected ""

@@ -7,42 +7,49 @@ open CommentsMap
 open Expecto
 open Utils
 
+let getComments = CommentsMap.getComments >> Array.ofList
+
 let commentsParsingTests = [   
     testCase "Line without comments gives empty result" <| fun _->
         // arrange, act
         let comments = @"let x = 10" |> getComments
 
         // assert
-        comments |> List.length ==? 0
+        comments.Length ==? 0
 
-    testCase "Line with single ranged coment is parsed to one ranged comment result" <| fun _ ->
+    testCase "Line with single ranged comment is parsed to one ranged comment result" <| fun _ ->
         // arrange, act
         let comments = @"let x = 10 (* some comment *)" |> getComments
-        let comment = comments |> List.head
-        let (LineCommentInfo.Range (left,right,wraps)) = comment.Comment
 
         // assert
-        comment.Line ==? 0
-        left ==? 11
-        right ==? 28
-        wraps ==? true
+        comments.Length ==? 1
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Range (11,28,true) } 
 
     testCase "Line with range and line comment is parsed to both comments" <| fun _ ->
         // arrange, act
         let comments = @"let x (* c *) // some line comment" |> getComments
-        let rangeComment = comments |> List.head
-        let lineComment = comments |> List.last
-        let (LineCommentInfo.Range (rangeLeft,rangeRight,rangeWraps)) = rangeComment.Comment
 
         // assert
-        comments |> List.length ==? 2
+        comments.Length ==? 2
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Range (6,12,false) }
+        comments.[1] ==? { Line = 0; Comment = LineCommentInfo.Line (14,false) }
+    
+    testCase "Line with two range comments is parsed" <| fun _ ->
+        // arrange, act
+        let comments = @"(* c *) (* b *)" |> getComments
 
-        rangeComment.Line ==? 0
-        rangeLeft ==? 6
-        rangeRight ==? 12
-        rangeWraps ==? false
+        // assert
+        comments.Length ==? 2
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Range (0,6,false) }
+        comments.[1] ==? { Line = 0; Comment = LineCommentInfo.Range (8,14,true) }
+    
+    testCase "Line comment absorbs range one" <| fun _ ->
+        // arrange, act
+        let comments = @"let // (* inner *)" |> getComments
 
-        lineComment.Line ==? 0
+        // assert
+        comments.Length ==? 1
+        comments.[0] ==? { Line = 0; Comment = LineCommentInfo.Line (4,false) } 
 
     |> fsiRunTest
     ]

@@ -9,7 +9,7 @@ type LineCommentInfo =
     | Range of left:int * right:int * wraps:bool
     | Line of left:int * wraps:bool
 
-type LineComments =
+type LineComment =
     { Line : int
       Comment : LineCommentInfo }
 

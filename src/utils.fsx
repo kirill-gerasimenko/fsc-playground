@@ -23,7 +23,6 @@ let getLines (str: string) =
             yield String.Empty
     ]
 
-
 let fsiPrinters = 
   { TestPrinters.beforeRun = fun (test:Test) -> printfn "Running test '%s' ..." (match test with | TestLabel (label,_) -> label | _ -> "")
     beforeEach = fun n -> printfn "'%s' starting..." n
@@ -34,5 +33,7 @@ let fsiPrinters =
     summary = fun summary -> printfn "Finished." }
 
 let fsiConfig = { defaultConfig with printer = fsiPrinters }
-let fsiRunTest = Expecto.Tests.runTests fsiConfig
+let fsiRunTest test = 
+    Expecto.Tests.runTests fsiConfig |> ignore
+    test
 let (==?) actual expected = Expect.equal actual expected ""

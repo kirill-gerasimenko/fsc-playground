@@ -4,9 +4,6 @@
 open Utils
 open Microsoft.FSharp.Compiler.SourceCodeServices
 
-type Range = Range of left:int * right:int
-type InfiniteRange = InfiniteRange of left:int
-
 type LineCommentInfo =
     | WholeLine of wraps:bool
     | Range of left:int * right:int * wraps:bool
